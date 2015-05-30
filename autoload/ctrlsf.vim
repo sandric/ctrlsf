@@ -12,7 +12,7 @@ let s:match_list     = []
 let s:jump_table     = []
 let s:ackprg_options = {}
 let s:launch_win     = {}
-" }}}
+ " }}}
 
 " Static Constants {{{1
 let s:ACK_ARGLIST = {
@@ -58,7 +58,7 @@ let s:ARGLIST = {
     \ 'ack-grep' : s:ACK_ARGLIST,
     \ 'ack'      : s:ACK_ARGLIST,
     \ }
-" }}}
+"  }}}
 
 " Public Functions {{{1
 " ctrlsf#Search() {{{2
@@ -112,10 +112,10 @@ func! ctrlsf#PreviewSectionC()
 endf
 " }}}
 " }}}
-" }}}
+"  }}}
 
 " Actions {{{1
-" s:Search() {{{2
+ " s:Search() {{{2
 func! s:Search(args) abort
     let args = a:args
 
@@ -181,6 +181,8 @@ func! s:JumpTo(mode) abort
         call s:OpenFileInTab(file, lnum, col, 2)
     elseif a:mode ==# 'p'
         call s:PreviewFile(file, lnum, col)
+    elseif a:mode ==# 'v'
+        call s:OpenFileInVerticalSplit(file, lnum, col, 1)
     endif
 endf
 " }}}
@@ -193,7 +195,7 @@ func! s:NextMatch(forward) abort
 endf
 " }}}
 
-" s:OpenWindow() {{{2
+"  s:OpenWindow() {{{2
 func! s:OpenWindow() abort
     " backup current bufnr and winnr
     let s:launch_win = {
@@ -227,6 +229,8 @@ func! s:OpenWindow() abort
         exec 'silent keepalt ' . openpos . winsize . 'split ' . '__CtrlSF__'
 
         call s:InitWindow()
+
+        stopinsert
     endif
 
     " resize other windows
@@ -266,7 +270,11 @@ func! s:OpenFileInWindow(file, lnum, col, mode) abort
     if a:mode == 1 && g:ctrlsf_auto_close
         let ctrlsf_winnr = s:FindCtrlsfWindow()
         if ctrlsf_winnr <= target_winnr
-            let target_winnr -= 1
+            if g:preview_window_opened
+              let target_winnr -= 2
+            else
+              let target_winnr -= 1
+            endif
         endif
         call s:CloseWindow()
     endif
@@ -293,7 +301,7 @@ func! s:OpenFileInWindow(file, lnum, col, mode) abort
 endf
 " }}}
 
-" s:OpenFileInTab() {{{2
+"  s:OpenFileInTab() {{{2
 " s:OpenFileInTab has 2 modes:
 "
 " 1. Open file in a new tab, close or leave CtrlSF window depending on value
@@ -309,6 +317,7 @@ func! s:OpenFileInTab(file, lnum, col, mode) abort
 
     exec 'tabedit ' . a:file
 
+
     call s:MoveCursor(a:lnum, a:col)
 
     if g:ctrlsf_selected_line_hl =~ 'o'
@@ -320,6 +329,30 @@ func! s:OpenFileInTab(file, lnum, col, mode) abort
     endif
 endf
 " }}}
+
+"  s:OpenFileInVerticalSplit() {{{2
+" s:OpenFileInVerticalSplit:
+"
+func! s:OpenFileInVerticalSplit(file, lnum, col, mode) abort
+    if a:mode == 1 && g:ctrlsf_auto_close
+        call s:CloseWindow()
+    endif
+
+    exec 'vs ' . a:file
+
+
+    call s:MoveCursor(a:lnum, a:col)
+
+    if g:ctrlsf_selected_line_hl =~ 'o'
+        call s:HighlightSelectedLine()
+    endif
+
+    if a:mode == 2
+        tabprevious
+    endif
+endf
+" }}}
+
 
 " s:PreviewFile() {{{2
 func! s:PreviewFile(file, lnum, col) abort
@@ -347,10 +380,12 @@ func! s:PreviewFile(file, lnum, col) abort
 
     call s:FocusCtrlsfWindow()
 endf
-" }}}
+ " }}}
 
 " s:OpenPreviewWindow() {{{2
 func! s:OpenPreviewWindow() abort
+    let g:preview_window_opened = 1
+
     if g:ctrlsf_position == "left" || g:ctrlsf_position == "right"
         let ctrlsf_width  = winwidth(0)
         let winsize = min([&columns-ctrlsf_width, ctrlsf_width])
@@ -373,12 +408,15 @@ func! s:OpenPreviewWindow() abort
     setl winfixwidth
     setl winfixheight
 
-    map q :call <SID>ClosePreviewWindow()<CR>
-endf
-" }}}
+    stopinsert
 
-" s:ClosePreviewWindow() {{{2
+    "map q :call <SID>ClosePreviewWindow()<CR>
+endf
+ " }}}
+
+"  s:ClosePreviewWindow() {{{2
 func! s:ClosePreviewWindow() abort
+    let g:preview_window_opened = 0
     if s:FocusPreviewWindow() == -1
         return
     endif
@@ -405,7 +443,7 @@ func! s:ClearSelectedLine() abort
     silent! call matchdelete(b:ctrlsf_highlight_id)
 endf
 " }}}
-" }}}
+ " }}}
 
 " Window Operations {{{1
 " s:InitWindow() {{{2
@@ -428,14 +466,15 @@ func! s:InitWindow() abort
 
     " default map
     nnoremap <silent><buffer> <CR>  :call <SID>JumpTo('o')<CR>
-    nnoremap <silent><buffer> o     :call <SID>JumpTo('o')<CR>
+    nnoremap <silent><buffer> <Space>     :call <SID>JumpTo('o')<CR>
     nnoremap <silent><buffer> O     :call <SID>JumpTo('O')<CR>
     nnoremap <silent><buffer> t     :call <SID>JumpTo('t')<CR>
     nnoremap <silent><buffer> T     :call <SID>JumpTo('T')<CR>
-    nnoremap <silent><buffer> p     :call <SID>JumpTo('p')<CR>
-    nnoremap <silent><buffer> <C-J> :call <SID>NextMatch(1)<CR>
-    nnoremap <silent><buffer> <C-K> :call <SID>NextMatch(0)<CR>
-    nnoremap <silent><buffer> q     :call <SID>CloseWindow()<CR>
+    nnoremap <silent><buffer> <C-P>     :call <SID>JumpTo('p')<CR><Esc>
+    nnoremap <silent><buffer> <C-X> :call <SID>NextMatch(1)<CR>
+    nnoremap <silent><buffer> <C-Z> :call <SID>NextMatch(0)<CR>
+    nnoremap <silent><buffer> <C-D>     :call <SID>CloseWindow()<CR>i
+    nnoremap <silent><buffer> <C-A>     :call <SID>JumpTo('v')<CR>
 endf
 " }}}
 
